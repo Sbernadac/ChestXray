@@ -14,12 +14,17 @@ from keras.callbacks import LearningRateScheduler, ModelCheckpoint, ReduceLROnPl
 from keras.optimizers import SGD,Adagrad,Adadelta,RMSprop,Adam
 from keras.layers.normalization import BatchNormalization
 from keras.utils import to_categorical
-from keras.regularizers import l2, l1, l1_l2
+from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import hamming_loss
+from sklearn.metrics import precision_score, recall_score, f1_score
 
+
+##########################################
+############# DEFINE #####################
 DIRECT_ORIGINALS='../../images/'
 DIRECT_AUGMENTED='../../imagesAugmented/'
 AUGMENTED_FILE='Data_augmented.csv'
-MODEL_NAME="myModel.h5"
+OUTPUT_DIR="AlexNetLike/"
 DATASET_SIZE=2000
 
 
@@ -38,8 +43,9 @@ PATHOLOGY_NAME = raw_input("Please enter pathology name : ")
 if len(PATHOLOGY_NAME)==0:
     PATHOLOGY_NAME='Cardiomegaly'
 
-MODEL_NAME="my"+PATHOLOGY_NAME+".h5"
-FILE_NAME='Data_'+PATHOLOGY_NAME+'.csv'
+MODEL_NAME="my"+PATHOLOGY_NAME+str(DATASET_SIZE)+".h5"
+FILE_NAME="Data_"+PATHOLOGY_NAME+str(DATASET_SIZE)+".csv"
+PICTURE_NAME=PATHOLOGY_NAME+str(DATASET_SIZE)+".png"
 result = [PATHOLOGY_NAME]
 
 def createDataSet():
@@ -113,6 +119,17 @@ def loadTrainingDataset(df):
 
     return df[df['currentTraining']==1].reset_index()
 
+#Create dataset for validation
+def loadDataset(df):
+    df['current_test'] = 0
+    #extract current pathology
+    df.loc[(df[PATHOLOGY_NAME]==1)&(df['test']==1),['current_test']]=1
+    size = df[df['current_test']==1]['Image Index'].count()
+    print("Current pathology test size : "+str(size))
+    df.loc[df[(df[PATHOLOGY_NAME]==0)&(df['test']==1)].sample(size).index,['current_test']]=1
+    data = df[df['current_test']==1]
+    return data.reset_index()
+
 #build image dataset according to data
 def buildImageset(df):
     start=time.time()
@@ -165,51 +182,6 @@ def lr_schedule(epoch):
     return lr
 
 
-#Load model
-model = loadModel()
-# SGD > RMSprop > Adam
-sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
-#sgd = SGD(lr=1e-4, decay=1e-6, momentum=0.9, nesterov=True)
-#opt = Adam(lr=lr_schedule(0))
-#optimizer = RMSprop(lr=lr_schedule(0), decay=1e-6)
-model.compile(loss='binary_crossentropy',
-              optimizer=sgd,
-              metrics=['accuracy'])
-
-#load and build training set
-data = createDataSet()
-dataTrain = loadTrainingDataset(data)
-X_train, Y_train = buildImageset(dataTrain)
-
-
-#Add callback to monitor model quality
-filepath=MODEL_NAME+"-{val_acc:.2f}.hdf5"
-checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True)
-
-lr_scheduler = LearningRateScheduler(lr_schedule)
-
-lr_reducer = ReduceLROnPlateau(factor=np.sqrt(0.1),
-                               cooldown=0,
-                               patience=5,
-                               min_lr=0.5e-6)
-callbacks_list = [checkpoint,lr_scheduler,lr_reducer]
-
-#train model
-#Y_train = to_categorical(Y_train, num_classes=2)
-start=time.time()
-history=model.fit(X_train, Y_train, batch_size=batch_size, epochs=epoch, shuffle=True, callbacks=callbacks_list, validation_split=0.10, verbose=1)
-end=time.time()
-print("fit duration :" +str(end-start)+"sec")
-
-#save model
-model.save(MODEL_NAME)
-
-#set currentTraining to O and Trained to 1
-data.loc[data['currentTraining']==1,['trained']]=1
-print("Already trained images : "+str(data[data['trained']==1]['Image Index'].count()))
-#save current step to training file 
-data.to_csv(FILE_NAME,index=False)
-
 def history_plot(history):
     plt.figure(1)
 
@@ -229,6 +201,108 @@ def history_plot(history):
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
 
-    plt.savefig("current.png")
+    plt.savefig(OUTPUT_DIR+PICTURE_NAME)
 
+
+
+################################################
+############### MAIN ###########################
+################################################
+
+#Load model
+model = loadModel()
+# SGD > RMSprop > Adam
+sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
+#sgd = SGD(lr=1e-4, decay=1e-6, momentum=0.9, nesterov=True)
+#opt = Adam(lr=lr_schedule(0))
+#optimizer = RMSprop(lr=lr_schedule(0), decay=1e-6)
+model.compile(loss='binary_crossentropy',
+              optimizer=sgd,
+              metrics=['accuracy'])
+
+#load and build training set
+data = createDataSet()
+dataTrain = loadTrainingDataset(data)
+X_train, Y_train = buildImageset(dataTrain)
+
+
+#Add callback to monitor model quality
+filepath=OUTPUT_DIR+MODEL_NAME+"-{val_acc:.2f}.hdf5"
+checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True)
+
+lr_scheduler = LearningRateScheduler(lr_schedule)
+
+lr_reducer = ReduceLROnPlateau(factor=np.sqrt(0.1),
+                               cooldown=0,
+                               patience=5,
+                               min_lr=0.5e-6)
+callbacks_list = [checkpoint,lr_scheduler,lr_reducer]
+
+#train model
+#Y_train = to_categorical(Y_train, num_classes=2)
+start=time.time()
+history=model.fit(X_train, Y_train, batch_size=batch_size, epochs=epoch, shuffle=True, callbacks=callbacks_list, validation_split=0.10, verbose=1)
+end=time.time()
+print("fit duration :" +str(end-start)+"sec")
+
+#save model
+model.save(OUTPUT_DIR+MODEL_NAME)
+
+#set currentTraining to O and Trained to 1
+data.loc[data['currentTraining']==1,['trained']]=1
+print("Already trained images : "+str(data[data['trained']==1]['Image Index'].count()))
+#save current step to training file 
+data.to_csv(OUTPUT_DIR+FILE_NAME,index=False)
+
+#plot history
 history_plot(history)
+
+
+#Check Results
+dataTest = loadDataset(data)
+X_test, y_test = buildImageset(dataTest)
+score = model.evaluate(X_test, y_test, verbose=1, batch_size=batch_size)
+print('Test loss:', score[0])
+print('Test accuracy:', score[1])
+out = model.predict(X_test, batch_size=batch_size)
+out = np.array(out)
+
+threshold = np.arange(0.001,0.01,0.001)
+np.seterr(divide='ignore', invalid='ignore')
+
+acc = []
+accuracies = []
+best_threshold = np.zeros(out.shape[1])
+for i in range(out.shape[1]):
+    y_prob = np.array(out[:,i])
+    for j in threshold:
+        y_pred = [1 if prob>=j else 0 for prob in y_prob]
+        acc.append( matthews_corrcoef(y_test[:,i],y_pred))
+    acc   = np.array(acc)
+    index = np.where(acc==acc.max()) 
+    accuracies.append(acc.max()) 
+    best_threshold[i] = threshold[index[0][0]]
+    acc = []
+
+print("best_threshold : "+str(best_threshold))
+y_pred = np.array([[1 if out[i,j]>=best_threshold[j] else 0 for j in range(y_test.shape[1])] for i in range(len(y_test))])
+    
+print("hamming loss : "+str(hamming_loss(y_test,y_pred)))  #the loss should be as low as possible and the range is from 0 to 1
+#print("results :\n"+str(y_pred))
+total_correctly_predicted = len([i for i in range(len(y_test)) if (y_test[i]==y_pred[i]).sum() == 1])
+print("totel correct : "+str(total_correctly_predicted))
+
+print("ratio correct predict: "+str(total_correctly_predicted/float(len(y_test))))
+    
+false_positive = np.array([1 if (y_test[i]==0 and y_pred[i]==1) else 0 for i in range(len(y_test))]).sum()
+print("false_positive = "+str(false_positive))
+false_negative = np.array([1 if (y_test[i]==1 and y_pred[i]==0) else 0 for i in range(len(y_test))]).sum()
+print("false_negative = "+str(false_negative))
+
+precision = precision_score(y_test, y_pred, average='weighted')
+recall = recall_score(y_test, y_pred, average='weighted')
+f1 = f1_score(y_test, y_pred, average="weighted")
+print("Precision: ", precision)
+print("Recall: ", recall)
+print("F1: ", f1)
+
