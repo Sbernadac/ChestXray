@@ -103,7 +103,7 @@ def loadTrainingDataset(df):
     total_size = df[(df[PATHOLOGY_NAME]==1)&(df['test']==0)&(data['trained']==0)][PATHOLOGY_NAME].count()
     total_size = min(DATASET_SIZE,total_size)
     df.loc[df[(df[PATHOLOGY_NAME]==1)&(df['test']==0)&(data['trained']==0)].sample(total_size).index,['currentTraining']]=1
-    print(PATHOLOGY_NAME+" train size : "+str(total_size))
+    print(PATHOLOGY_NAME+" size : "+str(total_size))
 
     #add no pathology
     df.loc[df[(df[PATHOLOGY_NAME]==0)&(df['test']==0)&(data['trained']==0)].sample(total_size).index,['currentTraining']]=1
@@ -125,7 +125,7 @@ def loadDataset(df):
 def buildImageset(df):
     start=time.time()
     sample_size = df['Image Index'].count()
-    print("buildImageset : "+PATHOLOGY_NAME+" sample_size : "+str(sample_size))
+    print("buildImageset : "+PATHOLOGY_NAME+" train size : "+str(sample_size))
     Y = np.ndarray((sample_size,1), dtype=np.float32)
     X = np.ndarray((sample_size, img_width, img_height, 1), dtype=np.float32)
 
@@ -239,7 +239,7 @@ print("fit duration :" +str(end-start)+"sec")
 #save model
 model.save(OUTPUT_DIR+MODEL_NAME)
 
-#set currentTraining to O and Trained to 1
+#set Trained to 1
 data.loc[data['currentTraining']==1,['trained']]=1
 print("Already trained images : "+str(data[data['trained']==1]['Image Index'].count()))
 #save current step to training file 
@@ -253,6 +253,8 @@ history_plot(history)
 dataTest = loadDataset(data)
 X_test, y_test = buildImageset(dataTest)
 score = model.evaluate(X_test, y_test, verbose=1, batch_size=batch_size)
+print("\n\n\n###########################")
+print("######## RESULTS ##########\n")
 print('Test loss:', score[0])
 print('Test accuracy:', score[1])
 out = model.predict(X_test, batch_size=batch_size)
