@@ -103,6 +103,22 @@ def buildImageset(df):
     
     return X, Y
 
+#compute best threshold
+def bestthreshold(threshold,out,y_test):
+    acc = []
+    accuracies = []
+    best_threshold = 0
+    y_prob = np.array(out[:,0])
+    for j in threshold:
+        y_pred = [1 if prob>=j else 0 for prob in y_prob]
+        acc.append( matthews_corrcoef(y_test[:,0],y_pred))
+    acc   = np.array(acc)
+    index = np.where(acc==acc.max())
+    accuracies.append(acc.max())
+    best_threshold = threshold[index[0][0]]
+
+    return best_threshold
+
 
 #Load model
 model = loadModel()
@@ -113,32 +129,26 @@ X_test, y_test = buildImageset(dataTest)
 #print("categorical expected results :\n"+str(y_test))
 if IMAGE_NAME=='test' or IMAGE_NAME=='random':
     score = model.evaluate(X_test, y_test, verbose=1, batch_size=batch_size)
+    print("\n\n\n###########################")
+    print("######## RESULTS ##########\n")
     print('Test loss:', score[0])
     print('Test accuracy:', score[1])
     out = model.predict(X_test, batch_size=batch_size)
 
     out = np.array(out)
 
-    threshold = np.arange(0.001,0.01,0.001)
-
     np.seterr(divide='ignore', invalid='ignore')
 
-    acc = []
-    accuracies = []
-    best_threshold = np.zeros(out.shape[1])
-    for i in range(out.shape[1]):
-        y_prob = np.array(out[:,i])
-        for j in threshold:
-            y_pred = [1 if prob>=j else 0 for prob in y_prob]
-            acc.append( matthews_corrcoef(y_test[:,i],y_pred))
-        acc   = np.array(acc)
-        index = np.where(acc==acc.max()) 
-        accuracies.append(acc.max()) 
-        best_threshold[i] = threshold[index[0][0]]
-        acc = []
-
+    threshold = np.arange(0.01,0.99,0.01)
+    best_threshold = bestthreshold(threshold,out,y_test)
     print("best_threshold : "+str(best_threshold))
-    y_pred = np.array([[1 if out[i,j]>=best_threshold[j] else 0 for j in range(y_test.shape[1])] for i in range(len(y_test))])
+    if best_threshold<0.02:
+        #try to find a better one
+        threshold = np.arange(0.001,0.01,0.001)
+        best_threshold = bestthreshold(threshold,out,y_test)
+        print("best_threshold : "+str(best_threshold))
+
+    y_pred = np.array([1 if out[i,0]>=best_threshold else 0 for i in range(len(y_test))])
     
     print("hamming loss : "+str(hamming_loss(y_test,y_pred)))  #the loss should be as low as possible and the range is from 0 to 1
     #print("results :\n"+str(y_pred))

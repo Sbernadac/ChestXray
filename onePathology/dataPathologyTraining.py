@@ -6,6 +6,7 @@ import cv2
 import time
 import keras
 import matplotlib.pyplot as plt
+import sys, getopt
 from keras.preprocessing.image import ImageDataGenerator, img_to_array
 from keras.models import Sequential, load_model, Model
 from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
@@ -26,39 +27,28 @@ DIRECT_ORIGINALS='../../images/'
 DIRECT_AUGMENTED='../../imagesAugmented/'
 AUGMENTED_FILE='Data_augmented.csv'
 OUTPUT_DIR="output/"
-DATASET_SIZE=2000
 
 
 batch_size=4
 epoch=50
 NUMBER_OF_DESEASES=1
-img_width, img_height = 512 ,512 
+img_width, img_height = 256 ,256 
 input_shape = (img_width, img_height,1)
 #cropping dimension
 crop_x,crop_y,crop_w,crop_h=(112,112,800,800)
 
 np.random.seed(1234)
 
-#get input data
-PATHOLOGY_NAME = raw_input("Please enter pathology name : ")
-if len(PATHOLOGY_NAME)==0:
-    PATHOLOGY_NAME='Cardiomegaly'
-
-MODEL_NAME="my"+PATHOLOGY_NAME+str(DATASET_SIZE)+".h5"
-FILE_NAME="Data_"+PATHOLOGY_NAME+str(DATASET_SIZE)+".csv"
-PICTURE_NAME=PATHOLOGY_NAME+str(DATASET_SIZE)+".png"
-result = [PATHOLOGY_NAME]
-
+##########################################################
+############### Functions ################################
+##########################################################
 def hybrid_pool_layer(x, pool_size=(2,2)):
     return Conv2D(int(x.shape[-1]), (1, 1))(
         keras.layers.concatenate([
             MaxPooling2D(pool_size)(x),
             AveragePooling2D(pool_size)(x)]))
 
-##########################################################
-############### Functions ################################
-##########################################################
-def createDataSet():
+def createDataSet(FILE_NAME):
     #check if training DataFrame already exists
     if os.path.exists(FILE_NAME):
         data = pd.read_csv(FILE_NAME)
@@ -75,7 +65,7 @@ def createDataSet():
     return data
 
 #loadModel : create or load already trained model
-def loadModel():
+def loadModel(MODEL_NAME):
     if os.path.exists(MODEL_NAME):
         model = load_model(MODEL_NAME)
     else:
@@ -99,11 +89,6 @@ def loadModel():
         x = AveragePooling2D(pool_size=(2,2))(x)
         #x = hybrid_pool_layer(x,pool_size=(3,3))
         #x = Dropout(0.2)(x)
-
-        x = Conv2D(160, kernel_size=3, padding='same')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-        x = AveragePooling2D(pool_size=(2,2))(x)
 
         x = Conv2D(192, kernel_size=3, padding='same')(x)
         x = BatchNormalization()(x)
@@ -147,22 +132,22 @@ def loadModel():
     return model
 
 #Create datasets
-def loadTrainingDataset(df):
+def loadTrainingDataset(df,PATHOLOGY_NAME,DATASET_SIZE):
     #build dataset to train
     df['currentTraining']=0
 
-    total_size = df[(df[PATHOLOGY_NAME]==1)&(df['test']==0)&(data['trained']==0)][PATHOLOGY_NAME].count()
+    total_size = df[(df[PATHOLOGY_NAME]==1)&(df['test']==0)&(df['trained']==0)][PATHOLOGY_NAME].count()
     total_size = min(DATASET_SIZE,total_size)
-    df.loc[df[(df[PATHOLOGY_NAME]==1)&(df['test']==0)&(data['trained']==0)].sample(total_size).index,['currentTraining']]=1
+    df.loc[df[(df[PATHOLOGY_NAME]==1)&(df['test']==0)&(df['trained']==0)].sample(total_size).index,['currentTraining']]=1
     print(PATHOLOGY_NAME+" size : "+str(total_size))
 
     #add no pathology
-    df.loc[df[(df[PATHOLOGY_NAME]==0)&(df['test']==0)&(data['trained']==0)].sample(total_size).index,['currentTraining']]=1
+    df.loc[df[(df[PATHOLOGY_NAME]==0)&(df['test']==0)&(df['trained']==0)].sample(total_size).index,['currentTraining']]=1
 
     return df[df['currentTraining']==1].reset_index()
 
 #Create dataset for validation
-def loadDataset(df):
+def loadDataset(df,PATHOLOGY_NAME):
     df['current_test'] = 0
     #extract current pathology
     df.loc[(df[PATHOLOGY_NAME]==1)&(df['test']==1),['current_test']]=1
@@ -173,10 +158,10 @@ def loadDataset(df):
     return data.reset_index()
 
 #build image dataset according to data
-def buildImageset(df):
+def buildImageset(df,PATHOLOGY_NAME):
     start=time.time()
     sample_size = df['Image Index'].count()
-    print("buildImageset : "+PATHOLOGY_NAME+" train size : "+str(sample_size))
+    print("buildImageset size : "+str(sample_size))
     Y = np.ndarray((sample_size,1), dtype=np.float32)
     X = np.ndarray((sample_size, img_width, img_height, 1), dtype=np.float32)
 
@@ -225,7 +210,7 @@ def lr_schedule(epoch):
     return lr
 
 
-def history_plot(history):
+def history_plot(history,PICTURE_NAME):
     plt.figure(1)
 
     plt.subplot(211)
@@ -246,107 +231,145 @@ def history_plot(history):
 
     plt.savefig(OUTPUT_DIR+PICTURE_NAME)
 
+#compute best threshold
+def bestthreshold(threshold,out,y_test):
+    acc = []
+    accuracies = []
+    best_threshold = 0
+    y_prob = np.array(out[:,0])
+    for j in threshold:
+        y_pred = [1 if prob>=j else 0 for prob in y_prob]
+        acc.append( matthews_corrcoef(y_test[:,0],y_pred))
+    acc   = np.array(acc)
+    index = np.where(acc==acc.max())
+    accuracies.append(acc.max())
+    best_threshold = threshold[index[0][0]]
 
+    return best_threshold
 
 ################################################
 ############### MAIN ###########################
 ################################################
 
-#Load model
-model = loadModel()
-# SGD > RMSprop > Adam
-#sgd = SGD(lr=1e-4, decay=1e-6, momentum=0.9, nesterov=True)
-opt = Adam(lr=lr_schedule(0))
-#optimizer = RMSprop(lr=lr_schedule(0), decay=1e-6)
-model.compile(loss='binary_crossentropy',
+def main(argv):
+
+    #Defaults values
+    PATHOLOGY_NAME='Cardiomegaly'
+    DATASET_SIZE=2000
+
+    try:
+        opts, args = getopt.getopt(argv,"hp:s:",["pathology=","size="])
+    except getopt.GetoptError:
+        print 'test.py -p <pathology> -s <size>'
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print 'test.py -p <pathology> -s <size>'
+            sys.exit()
+        elif opt in ("-p", "--pathology"):
+            PATHOLOGY_NAME = arg
+        elif opt in ("-s", "--size"):
+            DATASET_SIZE = int(arg)
+    print 'Pathology is ', PATHOLOGY_NAME
+    print 'Dataset pathology size is ', DATASET_SIZE
+
+    MODEL_NAME="my"+PATHOLOGY_NAME+str(DATASET_SIZE)+".h5"
+    FILE_NAME="Data_"+PATHOLOGY_NAME+str(DATASET_SIZE)+".csv"
+    PICTURE_NAME=PATHOLOGY_NAME+str(DATASET_SIZE)+".png"
+
+
+    #Load model
+    model = loadModel(MODEL_NAME)
+    # SGD > RMSprop > Adam
+    #sgd = SGD(lr=1e-4, decay=1e-6, momentum=0.9, nesterov=True)
+    opt = Adam(lr=lr_schedule(0))
+    #optimizer = RMSprop(lr=lr_schedule(0), decay=1e-6)
+    model.compile(loss='binary_crossentropy',
               optimizer=opt,
               metrics=['accuracy'])
 
-#load and build training set
-data = createDataSet()
-dataTrain = loadTrainingDataset(data)
-X_train, Y_train = buildImageset(dataTrain)
+    #load and build training set
+    data = createDataSet(FILE_NAME)
+    dataTrain = loadTrainingDataset(data,PATHOLOGY_NAME,DATASET_SIZE)
+    X_train, Y_train = buildImageset(dataTrain,PATHOLOGY_NAME)
 
 
-#Add callback to monitor model quality
-filepath=OUTPUT_DIR+MODEL_NAME+"-{val_acc:.2f}.hdf5"
-checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True)
+    #Add callback to monitor model quality
+    filepath=OUTPUT_DIR+MODEL_NAME+"-{val_acc:.2f}.hdf5"
+    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True)
 
-lr_scheduler = LearningRateScheduler(lr_schedule)
+    lr_scheduler = LearningRateScheduler(lr_schedule)
 
-lr_reducer = ReduceLROnPlateau(factor=np.sqrt(0.1),
-                               cooldown=0,
-                               patience=5,
-                               min_lr=0.5e-6)
-callbacks_list = [checkpoint,lr_scheduler,lr_reducer]
+    lr_reducer = ReduceLROnPlateau(factor=np.sqrt(0.1),
+                                   cooldown=0,
+                                   patience=5,
+                                   min_lr=0.5e-6)
+    #callbacks_list = [checkpoint,lr_scheduler,lr_reducer]
+    callbacks_list = [lr_scheduler,lr_reducer]
 
-#train model
-#Y_train = to_categorical(Y_train, num_classes=2)
-start=time.time()
-history=model.fit(X_train, Y_train, batch_size=batch_size, epochs=epoch, shuffle=True, callbacks=callbacks_list, validation_split=0.10, verbose=1)
-end=time.time()
-print("fit duration :" +str(end-start)+"sec")
+    #train model
+    #Y_train = to_categorical(Y_train, num_classes=2)
+    start=time.time()
+    history=model.fit(X_train, Y_train, batch_size=batch_size, epochs=epoch, shuffle=True, callbacks=callbacks_list, validation_split=0.10, verbose=1)
+    end=time.time()
+    print("fit duration :" +str(end-start)+"sec")
 
-#save model
-model.save(OUTPUT_DIR+MODEL_NAME)
+    #save model
+    model.save(OUTPUT_DIR+MODEL_NAME)
 
-#set Trained to 1
-data.loc[data['currentTraining']==1,['trained']]=1
-print("Already trained images : "+str(data[data['trained']==1]['Image Index'].count()))
-#save current step to training file 
-data.to_csv(OUTPUT_DIR+FILE_NAME,index=False)
+    #set Trained to 1
+    data.loc[data['currentTraining']==1,['trained']]=1
+    print("Already trained images : "+str(data[data['trained']==1]['Image Index'].count()))
+    #save current step to training file 
+    data.to_csv(OUTPUT_DIR+FILE_NAME,index=False)
 
-#plot history
-history_plot(history)
+    #plot history
+    history_plot(history,PICTURE_NAME)
 
 
-#Check Results
-dataTest = loadDataset(data)
-X_test, y_test = buildImageset(dataTest)
-score = model.evaluate(X_test, y_test, verbose=1, batch_size=batch_size)
-print("\n\n\n###########################")
-print("######## RESULTS ##########\n")
-print('Test loss:', score[0])
-print('Test accuracy:', score[1])
-out = model.predict(X_test, batch_size=batch_size)
-out = np.array(out)
+    #Check Results
+    dataTest = loadDataset(data,PATHOLOGY_NAME)
+    X_test, y_test = buildImageset(dataTest,PATHOLOGY_NAME)
+    score = model.evaluate(X_test, y_test, verbose=1, batch_size=batch_size)
+    print("\n\n\n###########################")
+    print("######## RESULTS ##########\n")
+    print('Test loss:', score[0])
+    print('Test accuracy:', score[1])
+    out = model.predict(X_test, batch_size=batch_size)
+    out = np.array(out)
 
-threshold = np.arange(0.001,0.01,0.001)
-np.seterr(divide='ignore', invalid='ignore')
+    np.seterr(divide='ignore', invalid='ignore')
 
-acc = []
-accuracies = []
-best_threshold = np.zeros(out.shape[1])
-for i in range(out.shape[1]):
-    y_prob = np.array(out[:,i])
-    for j in threshold:
-        y_pred = [1 if prob>=j else 0 for prob in y_prob]
-        acc.append( matthews_corrcoef(y_test[:,i],y_pred))
-    acc   = np.array(acc)
-    index = np.where(acc==acc.max()) 
-    accuracies.append(acc.max()) 
-    best_threshold[i] = threshold[index[0][0]]
-    acc = []
+    threshold = np.arange(0.01,0.99,0.01)
+    best_threshold = bestthreshold(threshold,out,y_test)
+    print("best_threshold : "+str(best_threshold))
+    if best_threshold<0.02:
+        #try to find a better one
+        threshold = np.arange(0.001,0.01,0.001)
+        best_threshold = bestthreshold(threshold,out,y_test)
+        print("best_threshold : "+str(best_threshold))
 
-print("best_threshold : "+str(best_threshold))
-y_pred = np.array([[1 if out[i,j]>=best_threshold[j] else 0 for j in range(y_test.shape[1])] for i in range(len(y_test))])
-    
-print("hamming loss : "+str(hamming_loss(y_test,y_pred)))  #the loss should be as low as possible and the range is from 0 to 1
-#print("results :\n"+str(y_pred))
-total_correctly_predicted = len([i for i in range(len(y_test)) if (y_test[i]==y_pred[i]).sum() == 1])
-print("totel correct : "+str(total_correctly_predicted))
+    y_pred = np.array([1 if out[i,0]>=best_threshold else 0 for i in range(len(y_test))])
+        
+    print("hamming loss : "+str(hamming_loss(y_test,y_pred)))  #the loss should be as low as possible and the range is from 0 to 1
+    #print("results :\n"+str(y_pred))
+    total_correctly_predicted = len([i for i in range(len(y_test)) if (y_test[i]==y_pred[i]).sum() == 1])
+    print("totel correct : "+str(total_correctly_predicted))
 
-print("ratio correct predict: "+str(total_correctly_predicted/float(len(y_test))))
-    
-false_positive = np.array([1 if (y_test[i]==0 and y_pred[i]==1) else 0 for i in range(len(y_test))]).sum()
-print("false_positive = "+str(false_positive))
-false_negative = np.array([1 if (y_test[i]==1 and y_pred[i]==0) else 0 for i in range(len(y_test))]).sum()
-print("false_negative = "+str(false_negative))
+    print("ratio correct predict: "+str(total_correctly_predicted/float(len(y_test))))
+        
+    false_positive = np.array([1 if (y_test[i]==0 and y_pred[i]==1) else 0 for i in range(len(y_test))]).sum()
+    print("false_positive = "+str(false_positive))
+    false_negative = np.array([1 if (y_test[i]==1 and y_pred[i]==0) else 0 for i in range(len(y_test))]).sum()
+    print("false_negative = "+str(false_negative))
 
-precision = precision_score(y_test, y_pred, average='weighted')
-recall = recall_score(y_test, y_pred, average='weighted')
-f1 = f1_score(y_test, y_pred, average="weighted")
-print("Precision: ", precision)
-print("Recall: ", recall)
-print("F1: ", f1)
+    precision = precision_score(y_test, y_pred, average='weighted')
+    recall = recall_score(y_test, y_pred, average='weighted')
+    f1 = f1_score(y_test, y_pred, average="weighted")
+    print("Precision: ", precision)
+    print("Recall: ", recall)
+    print("F1: ", f1)
 
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
