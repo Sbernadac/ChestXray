@@ -29,10 +29,10 @@ AUGMENTED_FILE='Data_augmented.csv'
 OUTPUT_DIR="output/"
 
 
-batch_size=4
+batch_size=8
 epoch=50
 NUMBER_OF_DESEASES=1
-img_width, img_height = 256 ,256 
+img_width, img_height = 512 ,512
 input_shape = (img_width, img_height,1)
 #cropping dimension
 crop_x,crop_y,crop_w,crop_h=(112,112,800,800)
@@ -71,7 +71,7 @@ def loadModel(MODEL_NAME):
     else:
         img_input = Input(shape=input_shape)
         #kernel_regularizer=l1_l2(l1=0.01, l2=0.01)
-        x = Conv2D(64, kernel_size=11, padding='same', activity_regularizer=l2(0.001))(img_input)
+        x = Conv2D(64, kernel_size=11, padding='same', strides=2, activity_regularizer=l2(0.001))(img_input)
         x = BatchNormalization()(x)
         x = Activation('relu')(x)
         x = AveragePooling2D(pool_size=(2,2))(x)
@@ -89,6 +89,11 @@ def loadModel(MODEL_NAME):
         x = AveragePooling2D(pool_size=(2,2))(x)
         #x = hybrid_pool_layer(x,pool_size=(3,3))
         #x = Dropout(0.2)(x)
+
+        x = Conv2D(160, kernel_size=3, padding='same')(x)
+        x = BatchNormalization()(x)
+        x = Activation('relu')(x)
+        x = AveragePooling2D(pool_size=(2,2))(x)
 
         x = Conv2D(192, kernel_size=3, padding='same')(x)
         x = BatchNormalization()(x)
@@ -120,9 +125,9 @@ def loadModel(MODEL_NAME):
         #x = hybrid_pool_layer(x,pool_size=(3,3))
 
         x = Flatten()(x)
-        x = Dense(2048, activation='relu')(x)
+        x = Dense(4096, activation='relu')(x)
         x = Dropout(0.5)(x)
-        x = Dense(2048, activation='relu')(x)
+        x = Dense(4096, activation='relu')(x)
         x = Dropout(0.3)(x)
         x = Dense(1, activation='sigmoid')(x)
         model = Model(img_input, x)
@@ -305,7 +310,7 @@ def main(argv):
                                    patience=5,
                                    min_lr=0.5e-6)
     #callbacks_list = [checkpoint,lr_scheduler,lr_reducer]
-    callbacks_list = [lr_scheduler,lr_reducer]
+    callbacks_list = [lr_scheduler]
 
     #train model
     #Y_train = to_categorical(Y_train, num_classes=2)
