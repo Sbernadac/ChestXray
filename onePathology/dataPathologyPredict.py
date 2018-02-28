@@ -22,10 +22,8 @@ DIRECT_AUGMENTED='../../imagesAugmented/'
 
 
 batch_size=4
-
-img_width, img_height = 512, 512
 NUMBER_OF_DESEASES=1
-input_shape = (img_width, img_height,1)
+
 #cropping dimension
 crop_x,crop_y,crop_w,crop_h=(112,112,800,800)
 np.random.seed(1234)
@@ -35,6 +33,8 @@ np.random.seed(1234)
 def loadModel(MODEL_NAME):
     if os.path.exists(MODEL_NAME):
         model = load_model(MODEL_NAME)
+    else:
+        sys.exit(1)
     return model
 
 
@@ -44,7 +44,7 @@ def loadDataset(image,file):
     df = pd.read_csv(file)
 
     if image=='test':
-        data = df[df['test']==1]
+        data = df[df['test']==1].sample(2000)
     elif image=='random':
         data = df[df['trained']==0].sample(100).reset_index()
         #data = df[df['test']==0].sample(100).reset_index():60
@@ -53,7 +53,7 @@ def loadDataset(image,file):
     return data.reset_index()
 
 #build image dataset according to data
-def buildImageset(df,PATHOLOGY_NAME):
+def buildImageset(df,PATHOLOGY_NAME,img_width, img_height):
     start=time.time()
     sample_size = df['Image Index'].count()
     print("buildImageset size : "+str(sample_size))
@@ -109,15 +109,16 @@ def main(argv):
     PATHOLOGY_NAME='Cardiomegaly'
     MODEL_NAME='myCardiomegaly2000.h5'
     IMAGE_NAME='test'
+    shape = 224
 
     try:
-        opts, args = getopt.getopt(argv,"hp:m:t:",["pathology=","model=","test="])
+        opts, args = getopt.getopt(argv,"hp:m:t:s:",["pathology=","model=","test=","shape="])
     except getopt.GetoptError:
-        print 'test.py -p <pathology> -m <model> -t <test>'
+        print 'test.py -p <pathology> -m <model> -t <test> -s <shape>'
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print 'test.py -p <pathology> -m <model> -t <test>'
+            print 'test.py -p <pathology> -m <model> -t <test> -s <shape>'
             sys.exit()
         elif opt in ("-p", "--pathology"):
             PATHOLOGY_NAME = arg
@@ -125,17 +126,20 @@ def main(argv):
             MODEL_NAME = arg
 	elif opt in ("-t", "--test"):
             IMAGE_NAME = arg
+        elif opt in ("-s", "--shape"):
+            shape = int(arg)
     print 'Pathology is ', PATHOLOGY_NAME
     print 'Pathology model is ', MODEL_NAME
     print 'Test is ', IMAGE_NAME
+    print 'Shape is ', str(shape)
 
     FILE_NAME="Data_"+PATHOLOGY_NAME+".csv"
-
+    img_width, img_height = shape, shape
     
     model = loadModel(MODEL_NAME)
     dataTest = loadDataset(IMAGE_NAME,FILE_NAME)
 
-    X_test, y_test = buildImageset(dataTest,PATHOLOGY_NAME)
+    X_test, y_test = buildImageset(dataTest,PATHOLOGY_NAME,img_width, img_height)
     #y_test = to_categorical(y_test, num_classes=2)
     #print("categorical expected results :\n"+str(y_test))
     if IMAGE_NAME=='test' or IMAGE_NAME=='random':
