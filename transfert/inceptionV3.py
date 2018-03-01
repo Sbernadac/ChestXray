@@ -15,7 +15,7 @@ from keras.callbacks import LearningRateScheduler, ModelCheckpoint, ReduceLROnPl
 from keras.optimizers import SGD,Adagrad,Adadelta,RMSprop,Adam
 from keras.layers.normalization import BatchNormalization
 from keras.utils import to_categorical
-from keras.applications.resnet50 import ResNet50, preprocess_input, decode_predictions
+from keras.applications.inception_v3 import InceptionV3
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import hamming_loss
 from sklearn.metrics import precision_score, recall_score, f1_score
@@ -26,12 +26,13 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 DIRECT_ORIGINALS='../../images/'
 DIRECT_AUGMENTED='../../imagesAugmented/'
 AUGMENTED_FILE='Data_augmented.csv'
-OUTPUT_DIR="RESNET/"
+OUTPUT_DIR="INCEPTION_2PASS/"
 
 
 batch_size=16
-epoch=100
+epoch=50
 NUMBER_OF_DESEASES=1
+PASS_2=True
 img_width, img_height = 224 , 224
 input_shape = (img_width, img_height,3)
 #cropping dimension
@@ -62,24 +63,15 @@ def createDataSet(FILE_NAME):
 def loadModel(MODEL_NAME):
     if os.path.exists(MODEL_NAME):
         model = load_model(MODEL_NAME)
-        for i, layer in enumerate(model.layers):
-            print(i, layer.name)
-        for layer in model.layers[:165]:
-            layer.trainable = False
-        for layer in model.layers[165:]:
-            layer.trainable = True
-        
     else:
-        base_model = ResNet50(include_top=False, weights='imagenet')
+        base_model = InceptionV3(weights='imagenet', include_top=False)
 
         # add a global spatial average pooling layer
         x = base_model.output
 
         x = GlobalAveragePooling2D()(x)
-        x = Dense(4096, activation='relu')(x)
-        x = Dropout(0.5)(x)
         # let's add a fully-connected layer
-        x = Dense(4096, activation='relu')(x)
+        x = Dense(2048, activation='relu')(x)
         # and a logistic layer -- 1 classes
         predictions = Dense(1, activation='sigmoid')(x)
 
@@ -249,7 +241,7 @@ def main(argv):
     #opt = Adam(lr=lr_schedule(0))
     #optimizer = RMSprop(lr=lr_schedule(0), decay=1e-6)
     model.compile(loss='binary_crossentropy',
-                  optimizer=sgd,
+                  optimizer='rmsprop',
                   metrics=['accuracy'])
 
     #load and build training set
@@ -278,9 +270,6 @@ def main(argv):
     end=time.time()
     print("fit duration :" +str(end-start)+"sec")
 
-    #save model
-    model.save(OUTPUT_DIR+MODEL_NAME)
-
     #set Trained to 1
     data.loc[data['currentTraining']==1,['trained']]=1
     print("Already trained images : "+str(data[data['trained']==1]['Image Index'].count()))
@@ -290,6 +279,28 @@ def main(argv):
     #plot history
     history_plot(history,PICTURE_NAME)
 
+    if PASS_2==True:
+        #Relaunch training to fine tune last Inception layers
+        for i, layer in enumerate(model.layers):
+            print(i, layer.name)
+    
+        for layer in model.layers[:249]:
+            layer.trainable = False
+        for layer in model.layers[249:]:
+            layer.trainable = True
+
+        model.compile(loss='binary_crossentropy',optimizer=sgd,metrics=['accuracy'])
+
+        start=time.time()
+        history=model.fit(X_train, Y_train, batch_size=batch_size, epochs=30, shuffle=True, callbacks=callbacks_list, validation_split=0.10, verbose=1)
+        end=time.time()
+        print("fit duration :" +str(end-start)+"sec")
+
+        #plot history
+        history_plot(history,"1_"+PICTURE_NAME)
+
+    #save model
+    model.save(OUTPUT_DIR+MODEL_NAME)
 
     #Check Results
     dataTest = loadDataset(data,PATHOLOGY_NAME)
