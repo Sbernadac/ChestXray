@@ -70,7 +70,7 @@ def loadDataset(image):
     if image=='test':
         data = df[df['test']==1]
     elif image=='random':
-        data = df[df['test']==1].sample(1000)
+        data = df[df['test']==1].sample(100)
     else:
         data = df[df['Image Index']==image]
     return data.reset_index()
@@ -80,7 +80,7 @@ def buildImageset(df,img_width, img_height):
     start=time.time()
     sample_size = df['Image Index'].count()
     Y = np.ndarray((sample_size, NUMBER_OF_DESEASES), dtype=np.float32)
-    X = np.ndarray((sample_size, img_width, img_height, 1), dtype=np.float32)
+    X = np.ndarray((sample_size, img_width, img_height, 3), dtype=np.float32)
 
     pat_list = ['Cardiomegaly','Emphysema','Effusion','Hernia','Nodule','Pneumothorax','Atelectasis','Pleural_Thickening','Mass','Edema','Consolidation','Infiltration','Fibrosis','Pneumonia']
 

@@ -8,7 +8,7 @@ import keras
 import matplotlib.pyplot as plt
 from keras.preprocessing.image import ImageDataGenerator, img_to_array
 from keras.models import Sequential, load_model, Model
-from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
+from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D, GlobalAveragePooling2D
 from keras.layers import Activation, Dropout, Flatten, Dense, Input
 from keras.callbacks import LearningRateScheduler, ModelCheckpoint, ReduceLROnPlateau
 from keras.optimizers import SGD,Adagrad,Adadelta,RMSprop,Adam
@@ -17,6 +17,8 @@ from keras.utils import to_categorical
 from keras.regularizers import l2, l1, l1_l2
 import tensorflow as tf
 import keras.backend.tensorflow_backend as tfb
+from keras.applications.inception_v3 import InceptionV3
+
 
 ##########################################
 ############# DEFINE #####################
@@ -32,8 +34,8 @@ POS_WEIGHT = 20  # multiplier for positive targets, needs to be tuned
 
 batch_size=4
 epoch=100
-img_width, img_height = 512 ,512
-input_shape = (img_width, img_height,1)
+img_width, img_height = 224 ,224
+input_shape = (img_width, img_height,3)
 #cropping dimension
 crop_x,crop_y,crop_w,crop_h=(112,112,800,800)
 
@@ -103,65 +105,24 @@ def loadModel():
         print("loadModel : "+MODEL_NAME+" already exists")
         model = load_model(MODEL_NAME)
     else:
-        model = Sequential()
-        model.add(Conv2D(64, kernel_size=11, padding='same', strides=2, input_shape=input_shape))
-        #kernel_regularizer=l1_l2(l1=0.01, l2=0.01)
-        #activity_regularizer=l2(0.01)
-        #model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(AveragePooling2D(pool_size=(2,2)))
+        base_model = InceptionV3(weights='imagenet', include_top=False)
 
-        model.add(Conv2D(96, kernel_size=7, padding='same'))
-        #model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(AveragePooling2D(pool_size=(2,2)))
+        # add a global spatial average pooling layer
+        x = base_model.output
 
-        model.add(Conv2D(128, kernel_size=7, padding='same'))
-        #model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(AveragePooling2D(pool_size=(2,2)))
-        #model.add(Dropout(0.2))
+        x = GlobalAveragePooling2D()(x)
+        # let's add a fully-connected layer
+        x = Dense(2048, activation='relu')(x)
+        # and a logistic layer -- 1 classes
+        predictions = Dense(NUMBER_OF_DESEASES, activation='sigmoid')(x)
 
-        model.add(Conv2D(160, kernel_size=3, padding='same'))
-        #model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(AveragePooling2D(pool_size=(2,2)))
+        # this is the model we will train
+        model = Model(inputs=base_model.input, outputs=predictions)
 
-        model.add(Conv2D(192, kernel_size=3, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(AveragePooling2D(pool_size=(2,2)))
-        #model.add(Dropout(0.2))
-
-        model.add(Conv2D(256, kernel_size=3, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(Conv2D(256, kernel_size=3, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(AveragePooling2D(pool_size=(2,2)))
-        #model.add(Dropout(0.2))
-
-        model.add(Conv2D(384, kernel_size=3, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(Conv2D(384, kernel_size=2, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(Conv2D(512, kernel_size=2, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(AveragePooling2D(pool_size=(3,3)))
-
-        model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-        model.add(Dense(4096))
-        model.add(Activation('relu'))
-        model.add(Dropout(0.3))
-        model.add(Dense(4096))
-        model.add(Activation('relu'))
-        #model.add(Dropout(0.2))
-        model.add(Dense(NUMBER_OF_DESEASES))
-        model.add(Activation('sigmoid'))
+        # first: train only the top layers (which were randomly initialized)
+        # i.e. freeze all convolutional ResNet layers
+        for layer in base_model.layers:
+            layer.trainable = False
     
 
     print(model.summary())
@@ -205,7 +166,7 @@ def buildImageset(df):
     sample_size = df['Image Index'].count()
     print("buildImageset sample_size : "+str(sample_size))
     Y = np.ndarray((sample_size,NUMBER_OF_DESEASES), dtype=np.float32)
-    X = np.ndarray((sample_size, img_width, img_height, 1), dtype=np.float32)
+    X = np.ndarray((sample_size, img_width, img_height, 3), dtype=np.float32)
     pat_list = ['Cardiomegaly','Emphysema','Effusion','Hernia','Nodule','Pneumothorax','Atelectasis','Pleural_Thickening','Mass','Edema','Consolidation','Infiltration','Fibrosis','Pneumonia']
 
     #import images as array
@@ -215,10 +176,11 @@ def buildImageset(df):
         else:
             d = DIRECT_ORIGINALS
         # Load image in grayscale
-        img = cv2.imread(d+row['Image Index'],0)
+        img = cv2.imread(d+row['Image Index'],1)
         #crop image
         img = img[crop_x:crop_x+crop_w,crop_y:crop_y+crop_h]
         img = cv2.resize(img, (img_width, img_height), interpolation = cv2.INTER_AREA)
+        #img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
         img = img_to_array(img)
         X[index] = (img - img.min())/(img.max() - img.min())
         Y[index] = row[pat_list]
@@ -281,12 +243,12 @@ def lr_schedule(epoch):
 #Load model
 model = loadModel()
 # SGD > RMSprop > Adam
-#sgd = SGD(lr=1e-4, decay=1e-6, momentum=0.9, nesterov=True)
-opt = Adam(lr=lr_schedule(0))
+sgd = SGD(lr=1e-3, decay=1e-6, momentum=0.9, nesterov=True)
+#opt = Adam(lr=lr_schedule(0))
 #optimizer = RMSprop(lr=lr_schedule(0), decay=1e-6)
 #model.compile(loss='binary_crossentropy',
 model.compile(loss=weighted_binary_crossentropy,
-              optimizer=opt,
+              optimizer='rmsprop',
               metrics=['accuracy'])
 
 #create or load dataset
@@ -318,7 +280,7 @@ end=time.time()
 print("fit duration :" +str(end-start)+"sec")
 
 #save model
-model.save(MODEL_NAME)
+#model.save(MODEL_NAME)
 
 
 #set currentTraining to O and Trained to 1
@@ -331,4 +293,24 @@ data.to_csv(SAVED_FILE,index=False)
 history_plot(history)
 
 
+#Relaunch training to fine tune last Inception layers
+for i, layer in enumerate(model.layers):
+    print(i, layer.name)
+    
+for layer in model.layers[:249]:
+    layer.trainable = False
+for layer in model.layers[249:]:
+    layer.trainable = True
 
+model.compile(loss='binary_crossentropy',optimizer=sgd,metrics=['accuracy'])
+
+start=time.time()
+history=model.fit(X_train, Y_train, batch_size=batch_size, epochs=30, shuffle=True, callbacks=callbacks_list, validation_split=0.10, verbose=1)
+end=time.time()
+print("fit duration :" +str(end-start)+"sec")
+
+#plot history
+#history_plot(history,"1_"+PICTURE_NAME)
+
+#save model
+model.save(MODEL_NAME)
