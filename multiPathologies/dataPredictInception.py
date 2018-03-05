@@ -11,7 +11,7 @@ from keras.models import Sequential, load_model
 from keras.preprocessing.image import ImageDataGenerator, img_to_array
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import hamming_loss
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 import tensorflow as tf
 import keras.backend.tensorflow_backend as tfb
 
@@ -129,7 +129,7 @@ def main(argv):
     #Defaults values
     MODEL_NAME='myModel.h5'
     IMAGE_NAME='test'
-    shape = 512
+    shape = 224
 
     try:
         opts, args = getopt.getopt(argv,"hp:m:t:s:",["pathology=","model=","test=","shape="])
@@ -219,6 +219,19 @@ def main(argv):
             print("   Precision: "+str(precision))
             print("   Recall: "+str(recall))
             print("   F1: "+str(f1))
+
+        y_pred = np.array([[1 if out[i,j]>=best_threshold[j] else 0 for j in range(y_test.shape[1])] for i in range(len(y_test))])
+        total_correctly_predicted = len([i for i in range(len(y_test)) if (y_test[i]==y_pred[i]).sum() == NUMBER_OF_DESEASES])
+        print("\nGlobal totel correct : "+str(total_correctly_predicted))
+        precision = precision_score(y_test, y_pred, average='weighted')
+        recall = recall_score(y_test, y_pred, average='weighted')
+        f1 = f1_score(y_test, y_pred, average="weighted")
+        roc = roc_auc_score(y_test, y_pred)
+        print("Global Precision: "+str(precision))
+        print("Global Recall: "+str(recall))
+        print("Global F1: "+str(f1))
+        print("Global Roc: "+str(roc))
+
 
     else:
         #Check model on image dataset
