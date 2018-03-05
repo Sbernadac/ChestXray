@@ -216,9 +216,12 @@ def main(argv):
             precision = precision_score(y_test[:,j], y_pred, average='weighted')
             recall = recall_score(y_test[:,j], y_pred, average='weighted')
             f1 = f1_score(y_test[:,j], y_pred, average="weighted")
+            roc = roc_auc_score(y_test[:,j], y_pred)
             print("   Precision: "+str(precision))
             print("   Recall: "+str(recall))
             print("   F1: "+str(f1))
+            print("   Roc: "+str(roc))
+
 
         y_pred = np.array([[1 if out[i,j]>=best_threshold[j] else 0 for j in range(y_test.shape[1])] for i in range(len(y_test))])
         total_correctly_predicted = len([i for i in range(len(y_test)) if (y_test[i]==y_pred[i]).sum() == NUMBER_OF_DESEASES])
