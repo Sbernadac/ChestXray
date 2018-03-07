@@ -220,7 +220,7 @@ def main(argv):
             print("   Precision: "+str(precision))
             print("   Recall: "+str(recall))
             print("   F1: "+str(f1))
-            print("   Roc: "+str(roc))
+            print("   AUC: "+str(roc))
 
 
         y_pred = np.array([[1 if out[i,j]>=best_threshold[j] else 0 for j in range(y_test.shape[1])] for i in range(len(y_test))])
@@ -233,7 +233,7 @@ def main(argv):
         print("Global Precision: "+str(precision))
         print("Global Recall: "+str(recall))
         print("Global F1: "+str(f1))
-        print("Global Roc: "+str(roc))
+        print("Global AUC: "+str(roc))
 
 
     else:

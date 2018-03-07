@@ -12,7 +12,8 @@ from keras.models import Sequential, load_model, Model
 from keras.utils import to_categorical
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import hamming_loss
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
+
 
 
 ##########################################
@@ -184,9 +185,13 @@ def main(argv):
         precision = precision_score(y_test, y_pred, average='weighted')
         recall = recall_score(y_test, y_pred, average='weighted')
         f1 = f1_score(y_test, y_pred, average="weighted")
-        print("Precision: ", precision)
-        print("Recall: ", recall)
-        print("F1: ", f1)
+        roc = roc_auc_score(y_test, y_pred)
+        print("Precision: "+str(precision))
+        print("Recall: "+str(recall))
+        print("F1: "+str(f1))
+        print("AUC: "+str(roc))
+
+
     else:
         #Check model on image dataset
         scores = model.predict(X_test)
