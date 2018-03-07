@@ -11,16 +11,20 @@ from keras.preprocessing.image import ImageDataGenerator, img_to_array
 from keras.utils import to_categorical
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import hamming_loss
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 from keras.applications.resnet50 import ResNet50, preprocess_input, decode_predictions
 
 
+
+##########################################
+############# DEFINE #####################
 DIRECT_ORIGINALS='../../images/'
 DIRECT_AUGMENTED='../../imagesAugmented/'
 
 
 batch_size=8
 
-img_width, img_height = 224 , 224
+img_width, img_height = 224, 224
 NUMBER_OF_DESEASES=1
 input_shape = (img_width, img_height,3)
 #cropping dimension
@@ -108,8 +112,8 @@ X_test, y_test = buildImageset(dataTest)
 x_test_mean = np.mean(X_test, axis=0)
 X_test -= x_test_mean
 print("expected results :\n"+str(y_test))
-y_test = to_categorical(y_test, num_classes=2)
-print("categorical expected results :\n"+str(y_test))
+#y_test = to_categorical(y_test, num_classes=2)
+#print("categorical expected results :\n"+str(y_test))
 if IMAGE_NAME=='test' or IMAGE_NAME=='random':
     score = model.evaluate(X_test, y_test, verbose=1)
     print('Test loss:', score[0])
@@ -137,15 +141,33 @@ if IMAGE_NAME=='test' or IMAGE_NAME=='random':
         best_threshold[i] = threshold[index[0][0]]
         acc = []
 
-    print("best_threshold : "+str(best_threshold))
-    y_pred = np.array([[1 if out[i,j]>=best_threshold[j] else 0 for j in range(y_test.shape[1])] for i in range(len(y_test))])
+    y_pred = np.array([1 if out[i,0]>=best_threshold else 0 for i in range(len(y_test))])
     
     print("hamming loss : "+str(hamming_loss(y_test,y_pred)))  #the loss should be as low as possible and the range is from 0 to 1
-    print("results :\n"+str(y_pred))
-    total_correctly_predicted = len([i for i in range(len(y_test)) if (y_test[i]==y_pred[i]).sum() == 2])
-    print("totel correct : "+str(total_correctly_predicted))
+    #print("results :\n"+str(y_pred))
+    total_correctly_predicted = len([i for i in range(len(y_test)) if (y_test[i]==y_pred[i]).sum() == 1])
+    print("total correct : "+str(total_correctly_predicted))
 
     print("ratio correct predict: "+str(total_correctly_predicted/float(len(y_test))))
+    
+    true_positive = np.array([1 if (y_test[i]==1) else 0 for i in range(len(y_test))]).sum()
+    false_positive = np.array([1 if (y_test[i]==0 and y_pred[i]==1) else 0 for i in range(len(y_test))]).sum()
+    correct_positive = np.array([1 if (y_test[i]==1 and y_pred[i]==1) else 0 for i in range(len(y_test))]).sum()
+    print("Positive: false="+str(false_positive)+ ", true="+str(true_positive)+ ", correct="+str(correct_positive)+ ", ratio="+str(correct_positive/(true_positive*1.0)))
+    true_negative = np.array([1 if (y_test[i]==0) else 0 for i in range(len(y_test))]).sum()
+    false_negative = np.array([1 if (y_test[i]==1 and y_pred[i]==0) else 0 for i in range(len(y_test))]).sum()
+    correct_negative = np.array([1 if (y_test[i]==0 and y_pred[i]==0) else 0 for i in range(len(y_test))]).sum()
+    print("Negative: false="+str(false_negative)+ ", true="+str(true_negative)+ ", correct="+str(correct_negative)+ ", ratio="+str(correct_negative/(true_negative*1.0)))
+
+    precision = precision_score(y_test, y_pred, average='weighted')
+    recall = recall_score(y_test, y_pred, average='weighted')
+    f1 = f1_score(y_test, y_pred, average="weighted")
+    roc = roc_auc_score(y_test, y_pred)
+    print("Precision: "+str(precision))
+    print("Recall: "+str(recall))
+    print("F1: "+str(f1))
+    print("AUC: "+str(roc))
+
 else:
     #Check model on image dataset
     scores = model.predict(X_test)
