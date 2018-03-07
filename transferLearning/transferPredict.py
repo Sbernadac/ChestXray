@@ -13,6 +13,7 @@ from keras.utils import to_categorical
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import hamming_loss
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
+from keras.applications.vgg19 import VGG19
 
 
 
@@ -30,6 +31,7 @@ crop_x,crop_y,crop_w,crop_h=(112,112,800,800)
 np.random.seed(1234)
 
 
+
 #loadModel : create or load already trained model
 def loadModel(MODEL_NAME):
     if os.path.exists(MODEL_NAME):
@@ -45,21 +47,20 @@ def loadDataset(image,file):
     df = pd.read_csv(file)
 
     if image=='test':
-        data = df[df['test']==1].sample(2000)
+        data = df[df['test']==1]
     elif image=='random':
-        data = df[df['trained']==0].sample(100).reset_index()
-        #data = df[df['test']==0].sample(100).reset_index()
+        data = df[df['test']==1].sample(2000)
     else:
         data = df[df['Image Index']==image]
     return data.reset_index()
 
 #build image dataset according to data
-def buildImageset(df,PATHOLOGY_NAME,img_width, img_height):
+def buildImageset(df,PATHOLOGY_NAME,img_width, img_height,third_dim):
     start=time.time()
     sample_size = df['Image Index'].count()
     print("buildImageset size : "+str(sample_size))
     Y = np.ndarray((sample_size,1), dtype=np.float32)
-    X = np.ndarray((sample_size, img_width, img_height, 1), dtype=np.float32)
+    X = np.ndarray((sample_size, img_width, img_height, third_dim), dtype=np.float32)
 
     #import images as array
     for index, row in df.iterrows():
@@ -72,7 +73,7 @@ def buildImageset(df,PATHOLOGY_NAME,img_width, img_height):
         #crop image
         img = img[crop_x:crop_x+crop_w,crop_y:crop_y+crop_h]
         img = cv2.resize(img, (img_width, img_height), interpolation = cv2.INTER_AREA)
-        #img = img.transpose()/255.0
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
         img = img_to_array(img)
         X[index] = (img - img.min())/(img.max() - img.min())
         Y[index] = row[PATHOLOGY_NAME]
@@ -111,15 +112,17 @@ def main(argv):
     MODEL_NAME='myCardiomegaly2000.h5'
     IMAGE_NAME='test'
     shape = 224
+    third_dim = 1
+
 
     try:
-        opts, args = getopt.getopt(argv,"hp:m:t:s:",["pathology=","model=","test=","shape="])
+        opts, args = getopt.getopt(argv,"hp:m:t:s:d:",["pathology=","model=","test=","shape=","third_dim="])
     except getopt.GetoptError:
-        print 'test.py -p <pathology> -m <model> -t <test> -s <shape>'
+        print 'test.py -p <pathology> -m <model> -t <test> -s <shape> -d <third_dim>'
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print 'test.py -p <pathology> -m <model> -t <test> -s <shape>'
+            print 'test.py -p <pathology> -m <model> -t <test> -s <shape> -d <third_dim>'
             sys.exit()
         elif opt in ("-p", "--pathology"):
             PATHOLOGY_NAME = arg
@@ -129,10 +132,13 @@ def main(argv):
             IMAGE_NAME = arg
         elif opt in ("-s", "--shape"):
             shape = int(arg)
+        elif opt in ("-d", "--third_dim"):
+            third_dim = int(arg)
     print 'Pathology is ', PATHOLOGY_NAME
     print 'Pathology model is ', MODEL_NAME
     print 'Test is ', IMAGE_NAME
     print 'Shape is ', str(shape)
+    print 'Third dimension is ', str(third_dim)
 
     FILE_NAME="Data_"+PATHOLOGY_NAME+".csv"
     img_width, img_height = shape, shape
@@ -140,7 +146,7 @@ def main(argv):
     model = loadModel(MODEL_NAME)
     dataTest = loadDataset(IMAGE_NAME,FILE_NAME)
 
-    X_test, y_test = buildImageset(dataTest,PATHOLOGY_NAME,img_width, img_height)
+    X_test, y_test = buildImageset(dataTest,PATHOLOGY_NAME,img_width, img_height,third_dim)
     #y_test = to_categorical(y_test, num_classes=2)
     #print("categorical expected results :\n"+str(y_test))
     if IMAGE_NAME=='test' or IMAGE_NAME=='random':

@@ -18,7 +18,7 @@ from keras.utils import to_categorical
 from keras.applications.vgg19 import VGG19
 from sklearn.metrics import matthews_corrcoef
 from sklearn.metrics import hamming_loss
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 
 
 ##########################################
@@ -324,9 +324,11 @@ def main(argv):
     precision = precision_score(y_test, y_pred, average='weighted')
     recall = recall_score(y_test, y_pred, average='weighted')
     f1 = f1_score(y_test, y_pred, average="weighted")
+    roc = roc_auc_score(y_test, y_pred)
     print("Precision: ", precision)
     print("Recall: ", recall)
     print("F1: ", f1)
+    print("AUC: "+str(roc))
 
 
 if __name__ == "__main__":
