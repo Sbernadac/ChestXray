@@ -21,15 +21,15 @@ Project/multiPathologies	      contains all scripts to manage multi pathologies 
 
 Python scripts parameters:
 
--p   <pathology name: one name between all pathologies>
+-p   pathology name: one name between all pathologies
   
--t   <test type: between 'test' (all test dataset 11145) 'random' (2000 extracted from test dataset) 'image name' (for simple test)>
+-t   test type: between 'test' (all test dataset 11145) 'random' (2000 extracted from test dataset) 'image name' (for simple test)
 
--s   <shape value: height and weight have same size>
+-s   shape value: height and weight have same size
   
--d   <dimension value: 1 for grayscale 3 for rgb>
+-d   dimension value: 1 for grayscale 3 for rgb
 
--m   <model name (for predict scripts)>
+-m   model name (for predict scripts)
 
 
 
