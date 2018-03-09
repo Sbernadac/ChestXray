@@ -1,32 +1,35 @@
 # ChestXray
 Machine-learning on XRay
 
+
+
 Tree directories :
 
-Project/images/ 		contains all original images
+Project/images/ 		            contains all original images
 
-Project/imagesAugmented/	contains all augmented images
+Project/imagesAugmented/	      contains all augmented images
 
-Project/Data/			contains all scripts to split data set between Test and Training/Validation
+Project/Data/			              contains all scripts to split data set between Test and Training/Validation
 
-Project/Simple/onePathology	conyains all scripts to manage simple pathology detection
+Project/Simple/onePathology	    contains all scripts to manage simple pathology detection
 
 Project/Simple/transferLearning contains all scripts to manage transfer learning
 
-Project/multiPathologies	contains all scripts to manage multi pathologies detection
+Project/multiPathologies	      contains all scripts to manage multi pathologies detection
+
 
 
 Python scripts parameters:
 
--p <pathology name>
+-p   <pathology name: one name between all pathologies>
   
--t <test type: between 'test' (all test dataset 11145) 'random' (2000 extracted from test dataset) 'image name' (for simple test)>
+-t   <test type: between 'test' (all test dataset 11145) 'random' (2000 extracted from test dataset) 'image name' (for simple test)>
 
--s <shape value: image height and weight size>
+-s   <shape value: height and weight have same size>
   
--d <dimension value: 1 for grayscale 3 for rgb>
+-d   <dimension value: 1 for grayscale 3 for rgb>
 
--m <model name (for predict scripts)>
+-m   <model name (for predict scripts)>
 
 
 
