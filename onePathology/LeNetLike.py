@@ -280,7 +280,7 @@ def main(argv):
     history_plot(history,PICTURE_NAME)
 
 
-    #Check Results
+    #Check Results on TEST train
     dataTest = loadDataset(data,PATHOLOGY_NAME)
     X_test, y_test = buildImageset(dataTest,PATHOLOGY_NAME)
     score = model.evaluate(X_test, y_test, verbose=1, batch_size=batch_size)

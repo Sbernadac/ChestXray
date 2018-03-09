@@ -70,26 +70,23 @@ def loadDataset(image):
     if image=='test':
         data = df[df['test']==1]
     elif image=='random':
-        data = df[df['test']==1].sample(1000)
+        data = df[df['test']==1].sample(2000)
     else:
         data = df[df['Image Index']==image]
     return data.reset_index()
 
 #build image dataset according to data
-def buildImageset(df,img_width, img_height):
+def buildImageset(df,img_width, img_height, third_dim):
     start=time.time()
     sample_size = df['Image Index'].count()
     Y = np.ndarray((sample_size, NUMBER_OF_DESEASES), dtype=np.float32)
-    X = np.ndarray((sample_size, img_width, img_height, 1), dtype=np.float32)
+    X = np.ndarray((sample_size, img_width, img_height, third_dim), dtype=np.float32)
 
     pat_list = ['Cardiomegaly','Emphysema','Effusion','Hernia','Nodule','Pneumothorax','Atelectasis','Pleural_Thickening','Mass','Edema','Consolidation','Infiltration','Fibrosis','Pneumonia']
 
     #import images as array
     for index, row in df.iterrows():
-        if row['Augmented']==1:
-            d = DIRECT_AUGMENTED
-        else:
-            d = DIRECT_ORIGINALS
+        d = DIRECT_ORIGINALS
         # Load image in grayscale
         img = cv2.imread(d+row['Image Index'],0)
         #crop image
@@ -123,22 +120,27 @@ def bestthreshold(threshold,out,y_test):
         acc = []
     return best_threshold
 
+################################################
+############### MAIN ###########################
+################################################
 
 def main(argv):
 
     #Defaults values
     MODEL_NAME='myModel.h5'
     IMAGE_NAME='test'
-    shape = 512
+    shape = 224
+    third_dim = 1
+
 
     try:
-        opts, args = getopt.getopt(argv,"hp:m:t:s:",["pathology=","model=","test=","shape="])
+        opts, args = getopt.getopt(argv,"hm:t:s:d:",["model=","test=","shape=","third_dim="])
     except getopt.GetoptError:
-        print 'test.py -m <model> -t <test> -s <shape>'
+        print 'dataPredict.py  -m <model> -t <test> -s <shape> -d <third_dim>'
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print 'test.py -m <model> -t <test> -s <shape>'
+            print 'dataPredict.py -m <model> -t <test> -s <shape> -d <third_dim>'
             sys.exit()
         elif opt in ("-m", "--model"):
             MODEL_NAME = arg
@@ -146,9 +148,12 @@ def main(argv):
             IMAGE_NAME = arg
         elif opt in ("-s", "--shape"):
             shape = int(arg)
+        elif opt in ("-d", "--third_dim"):
+            third_dim = int(arg)
     print 'Pathology model is ', MODEL_NAME
     print 'Test is ', IMAGE_NAME
     print 'Shape is ', str(shape)
+    print 'Third dimension is ', str(third_dim)
 
     img_width, img_height = shape, shape
     
@@ -159,7 +164,7 @@ def main(argv):
     pathology_list = ['Cardiomegaly','Emphysema','Effusion','Hernia','Nodule','Pneumothorax','Atelectasis','Pleural_Thickening','Mass','Edema','Consolidation','Infiltration','Fibrosis','Pneumonia','No Finding']
 
 
-    X_test, y_test = buildImageset(dataTest,img_width, img_height)
+    X_test, y_test = buildImageset(dataTest,img_width, img_height, third_dim)
     #y_test = to_categorical(y_test, num_classes=2)
     #print("categorical expected results :\n"+str(y_test))
     if IMAGE_NAME=='test' or IMAGE_NAME=='random':

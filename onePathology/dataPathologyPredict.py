@@ -45,10 +45,9 @@ def loadDataset(image,file):
     df = pd.read_csv(file)
 
     if image=='test':
-        data = df[df['test']==1].sample(2000)
+        data = df[df['test']==1]
     elif image=='random':
-        data = df[df['trained']==0].sample(100).reset_index()
-        #data = df[df['test']==0].sample(100).reset_index()
+        data = df[df['test']==1].sample(2000)
     else:
         data = df[df['Image Index']==image]
     return data.reset_index()
@@ -115,11 +114,11 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv,"hp:m:t:s:",["pathology=","model=","test=","shape="])
     except getopt.GetoptError:
-        print 'test.py -p <pathology> -m <model> -t <test> -s <shape>'
+        print 'dataPathologyPredict.py -p <pathology> -m <model> -t <test> -s <shape>'
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print 'test.py -p <pathology> -m <model> -t <test> -s <shape>'
+            print 'dataPathologyPredict.py -p <pathology> -m <model> -t <test> -s <shape>'
             sys.exit()
         elif opt in ("-p", "--pathology"):
             PATHOLOGY_NAME = arg
